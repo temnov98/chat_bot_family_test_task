@@ -1,6 +1,8 @@
-import { IStorage } from "./storage.interface";
+import { injectable } from "inversify";
+import { Types } from "../types";
 
-export class InMemoryStorage implements IStorage {
+@injectable()
+export class InMemoryStorage implements Types.Storage.TYPE {
   // #region Private Fields
 
   private readonly items: Set<string> = new Set();

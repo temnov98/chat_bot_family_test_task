@@ -1,10 +1,12 @@
-import { ConfigsService } from "./configs/configs.service";
+import "reflect-metadata";
+import { applicationContainer } from "./inversify.config";
+import { Types } from "./types";
 
 async function main(): Promise<void> {
-  const configService = new ConfigsService();
-  
-  console.log('ENV:');
-  console.log(configService.telegram);
+  const telegramService = applicationContainer.get<Types.TelegramService.TYPE>(Types.TelegramService.TOKEN);
+  telegramService.start();
+
+  console.log('Started');
 }
 
 main();

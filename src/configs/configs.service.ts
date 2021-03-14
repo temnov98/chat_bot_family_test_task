@@ -1,9 +1,12 @@
 require('dotenv').config();
 import * as Joi from "@hapi/joi";
+import { injectable } from "inversify";
+import { Types } from "../types";
 import { IEnvConfig } from "./env-config.interface";
 import { JoiSchema } from "./joi-schema.const";
 
-export class ConfigsService {
+@injectable()
+export class ConfigsService implements Types.ConfigsService.TYPE {
   // #region Private Fields 
 
   private readonly envConfig: IEnvConfig;

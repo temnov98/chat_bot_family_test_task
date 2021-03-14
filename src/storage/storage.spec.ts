@@ -1,5 +1,6 @@
+import "reflect-metadata";
 import { InMemoryStorage } from "./in-memory.storage";
-import { IStorage } from "./storage.interface";
+import { IStorage } from "../interfaces/storage.interface";
 
 describe('InMemoryStorage', () => {
   let storages: IStorage[];
