@@ -5,4 +5,5 @@ export interface IStorage {
   addItemToBag(userId: string, item: string): Promise<void>;
   getItemsInBag(userId: string): Promise<string[]>;
   clearBag(userId: string): Promise<void>;
+  payOrder(userId: string): Promise<string>;
 }

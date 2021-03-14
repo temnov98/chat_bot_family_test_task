@@ -7,6 +7,7 @@ export class InMemoryStorage implements Types.Storage.TYPE {
 
   private readonly items: Set<string> = new Set();
   private readonly userIdToBag: Map<string, string[]> = new Map();
+  private readonly orderIdToBag: Map<string, string[]> = new Map();
 
   // #endregion
 
@@ -44,6 +45,15 @@ export class InMemoryStorage implements Types.Storage.TYPE {
 
   public async clearBag(userId: string): Promise<void> {
     this.userIdToBag.delete(userId);
+  }
+
+  public async payOrder(userId: string): Promise<string> {
+    const orderId = Date.now().toString();
+
+    const bag = await this.getItemsInBag(userId);
+    this.orderIdToBag.set(orderId, bag);
+
+    return orderId;
   }
 
   // #endregion
