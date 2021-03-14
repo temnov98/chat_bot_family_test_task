@@ -24,6 +24,10 @@ export class InMemoryStorage implements Types.Storage.TYPE {
     return [...this.items];
   }
 
+  public async itemExists(item: string): Promise<boolean> {
+    return this.items.has(item);
+  }
+
   public async addItemToBag(userId: string, item: string): Promise<void> {
     if (!this.items.has(item)) {
       throw new Error('Item not found');
