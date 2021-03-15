@@ -27,15 +27,16 @@ export class TelegramService implements Types.TelegramService.TYPE {
   public async start(): Promise<void> {    
     const bot = new Telegraf(this.configsService.telegram.botToken);
 
+    bot.on('channel_post', this.onChannelPost.bind(this));
     bot.action(Actions.AddItem, this.onAddItem.bind(this));
     bot.action(Actions.ShowAllItems, this.onShowAllItems.bind(this));
     bot.action(Actions.ShowMyBag, this.onShowMyBag.bind(this));
-    bot.action(Actions.AddItemToBag, this.onAddItemToBag.bind(this));
     bot.action(Actions.ClearBag, this.onClearBag.bind(this));
     bot.action(Actions.PlaceOrder, this.onPlaceOrder.bind(this));
     bot.action(Actions.PayOrder, this.onPayOrder.bind(this));
     bot.command('/start', this.onStart.bind(this));
     bot.on('text', this.onText.bind(this));
+    bot.on('callback_query', this.onCallbackQuery.bind(this));
 
     bot.launch();
   }
@@ -44,6 +45,55 @@ export class TelegramService implements Types.TelegramService.TYPE {
 
   // #region Private Methods
 
+  private async onCallbackQuery(ctx: Context): Promise<void> {
+    const userId = ctx.callbackQuery?.from.id;
+    if (!userId) {
+      return;
+    }
+
+    const data: string = (ctx.callbackQuery as { data: string }).data || '';
+
+    if (data.indexOf(Actions.AddItemToBag) !== 0) {
+      return;
+    }
+
+    const itemId = data.replace(`${Actions.AddItemToBag}:`, '');
+    const item = await this.storage.getItemById(itemId);
+    if (!item) {
+      console.log(`Item with id ${itemId} not found`);
+      return;
+    }
+
+    await this.storage.addItemToBag(userId.toString(), item.id);
+
+    ctx.answerCbQuery();
+    ctx.telegram.sendMessage(userId, `Товар "${item.name}" добавлен`);
+  }
+
+  private async onChannelPost(ctx: Context): Promise<void> {
+    const text = (ctx.channelPost as { text: string }).text;
+
+    if (text !== '/show_items') {
+      return;
+    }
+
+    const items = await this.storage.getAllItems();
+    if (items.length === 0) {
+      ctx.reply(`Нет товаров`);
+      return;
+    }
+
+    for (const item of items) {
+      const buttons = [
+        Markup.button.callback('Добавить в корзину', `${Actions.AddItemToBag}:${item.id}`),
+        Markup.button.url('Перейти в корзину', `https://t.me/${ctx.me}?start=some_data`),
+      ];
+
+      const keyboard = Markup.inlineKeyboard(buttons, { columns: 1 });
+  
+      ctx.reply(`Товар: ${item.name}`, keyboard);
+    }
+  }
 
   private async onAddItem(ctx: Context): Promise<void> {
     if (!ctx.chat) {
@@ -57,16 +107,19 @@ export class TelegramService implements Types.TelegramService.TYPE {
     const state = this.getState(ctx);
     state.mustEnterItemForAdd = true;
     ctx.reply(`Введите название товара:`);
+    ctx.answerCbQuery();
   }
 
   private async onShowAllItems(ctx: Context): Promise<void> {
     const items = await this.storage.getAllItems();
-      if (items.length === 0) {
-        ctx.reply(`Нет товаров`);
-        return;
-      }
+    if (items.length === 0) {
+      ctx.reply(`Нет товаров`);
+      ctx.answerCbQuery();
+      return;
+    }
 
-      ctx.reply(`Товары:\n${items.join('\n')}`);
+    ctx.reply(`Товары:\n${items.map(item => item.name).join('\n')}`);
+    ctx.answerCbQuery();
   }
 
   private async onShowMyBag(ctx: Context): Promise<void> {
@@ -78,23 +131,16 @@ export class TelegramService implements Types.TelegramService.TYPE {
       const items = await this.storage.getItemsInBag(ctx.chat.id.toString());
       if (items.length === 0) {
         ctx.reply(`Нет товаров`);
+        ctx.answerCbQuery();
         return;
       }
 
-      ctx.reply(`Товары:\n${items.join('\n')}`);
+      ctx.reply(`Товары:\n${items.map(item => item.name).join('\n')}`);
+      ctx.answerCbQuery();
     } catch (e) {
       ctx.reply(`Что-то пошло не так`);
+      ctx.answerCbQuery();
     }
-  }
-
-  private async onAddItemToBag(ctx: Context): Promise<void> {
-    if (!ctx.chat) {
-      return;
-    }
-
-    const state = this.getState(ctx);
-    state.mustEnterItemForAddToBag = true;
-    ctx.reply(`Введите название товара:`);
   }
 
   private async onClearBag(ctx: Context): Promise<void> {
@@ -105,8 +151,10 @@ export class TelegramService implements Types.TelegramService.TYPE {
     try {
       await this.storage.clearBag(ctx.chat.id.toString());
       ctx.reply(`Корзина очищена. Нажмите /start для просмота доступных действий`);
+      ctx.answerCbQuery();
     } catch (e) {
       ctx.reply(`Что-то пошло не так`);
+      ctx.answerCbQuery();
     }
   }
 
@@ -118,6 +166,7 @@ export class TelegramService implements Types.TelegramService.TYPE {
     const itemsInBag = await this.storage.getItemsInBag(ctx.chat.id.toString());
     if (itemsInBag.length === 0) {
       ctx.reply(`Корзина пуста!`);
+      ctx.answerCbQuery();
       return;
     }
 
@@ -127,7 +176,8 @@ export class TelegramService implements Types.TelegramService.TYPE {
     const buttons = [Markup.button.callback('Оплатил(а)', Actions.PayOrder)];
     const keyboard = Markup.inlineKeyboard(buttons, { columns: 1 });
 
-    ctx.reply(`Оплатите заказ. Ваш заказ:\n${itemsInBag.join('\n')}`, keyboard);
+    ctx.reply(`Оплатите заказ. Ваш заказ:\n${itemsInBag.map(item => item.name).join('\n')}`, keyboard);
+    ctx.answerCbQuery();
   }
 
   private async onPayOrder(ctx: Context): Promise<void> {
@@ -138,21 +188,30 @@ export class TelegramService implements Types.TelegramService.TYPE {
     const state = this.getState(ctx);
     if (!state.mustPay) {
       ctx.reply(`Уже нельзя оплатить заказ. Попробуйте нажать /start`);
+      ctx.answerCbQuery();
       return;
     }
 
     const itemsInBag = await this.storage.getItemsInBag(ctx.chat.id.toString());
     if (itemsInBag.length === 0) {
       ctx.reply(`Корзина пуста!`);
+      ctx.answerCbQuery();
       return;
     }
 
     state.mustPay = false;
     await this.storage.clearBag(ctx.chat.id.toString());
     ctx.reply(`Ваш заказ оплачен!`);
+    ctx.answerCbQuery();
 
-    const orderId = await this.storage.payOrder(ctx.chat.id.toString());
-    const adminMessage = `Пользователь (id = ${ctx.chat.id}) оплатил заказ.\nЕго корзина:\n${itemsInBag.join('\n')}.\nOrder id: ${orderId}`;
+    const order = await this.storage.payOrder(ctx.chat.id.toString());
+    const adminMessage = [
+      `Пользователь (id = ${ctx.chat.id}) оплатил заказ.`,
+      `Его корзина:`,
+      `${itemsInBag.map(item => item.name).join('\n')}`,
+      `Order id: ${order.orderId}`,
+    ].join('\n');
+    
     ctx.telegram.sendMessage(this.configsService.telegram.adminChatId, adminMessage);
   }
 
@@ -164,8 +223,7 @@ export class TelegramService implements Types.TelegramService.TYPE {
     const itemsInBag = await this.storage.getItemsInBag(ctx.chat.id.toString());
 
     const buttons = [
-      Markup.button.callback('Показать всё товары', Actions.ShowAllItems),      
-      Markup.button.callback('Добавить товар в корзину', Actions.AddItemToBag),
+      Markup.button.callback('Показать всё товары', Actions.ShowAllItems),
     ];
     
     if (itemsInBag.length > 0) {
@@ -214,37 +272,12 @@ export class TelegramService implements Types.TelegramService.TYPE {
       return;
     }
 
-    if (state.mustEnterItemForAddToBag) {
-      const item: string | undefined = ctx.message.text;
-      if (!item) {
-        ctx.reply(`Вы не ввели название товара`);
-        return;
-      }
-
-      const itemExists = await this.storage.itemExists(item);
-      if (!itemExists) {
-        ctx.reply(`Товар "${item}" не найден`);
-        return;
-      }
-
-      try {
-        await this.storage.addItemToBag(ctx.chat.id.toString(), item);
-        ctx.reply(`Товар "${item}" добавлен в корзину.\nНажмите /start для просмотра доступных действий`);
-      } catch (e) {
-        ctx.reply(`Что-то сломалось`);
-      }
-
-      state.mustEnterItemForAddToBag = false;
-      return;
-    }
-
     ctx.reply(`Что вы имели в виду?\nПопробуйте нажать /start`);
   }
 
   private getState(ctx: Context): IState {
     const defaultResult: IState = {
       mustEnterItemForAdd: false,
-      mustEnterItemForAddToBag: false,
       mustPay: false,
     };
 

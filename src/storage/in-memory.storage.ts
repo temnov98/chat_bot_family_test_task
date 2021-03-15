@@ -1,59 +1,64 @@
 import { injectable } from "inversify";
 import { Types } from "../types";
+import { ItemModel } from "./item.model";
 
 @injectable()
 export class InMemoryStorage implements Types.Storage.TYPE {
   // #region Private Fields
 
-  private readonly items: Set<string> = new Set();
-  private readonly userIdToBag: Map<string, string[]> = new Map();
-  private readonly orderIdToBag: Map<string, string[]> = new Map();
+  private readonly itemIdToItem: Map<string, ItemModel> = new Map();
+  private readonly userIdToItemIdsInBag: Map<string, string[]> = new Map();
+  private readonly orderIdToItemsInBag: Map<string, string[]> = new Map();
 
   // #endregion
 
   // #region Public Methods
 
-  public async addItem(item: string): Promise<void> {
-    if (this.items.has(item)) {
-      throw new Error('Item already exists');
-    }
+  public async addItem(name: string): Promise<Readonly<ItemModel>> {
+    const item: ItemModel = {
+      name,
+      id: Date.now().toString(),
+    };
 
-    this.items.add(item);
+    this.itemIdToItem.set(item.id, item);
+    return item;
   }
 
-  public async getAllItems(): Promise<string[]> {
-    return [...this.items];
+  public async getAllItems(): Promise<Readonly<ItemModel>[]> {
+    return [...this.itemIdToItem.values()];
   }
 
-  public async itemExists(item: string): Promise<boolean> {
-    return this.items.has(item);
+  public async getItemById(itemId: string): Promise<Readonly<ItemModel> | undefined> {
+    return this.itemIdToItem.get(itemId);
   }
 
-  public async addItemToBag(userId: string, item: string): Promise<void> {
-    if (!this.items.has(item)) {
+  public async addItemToBag(userId: string, itemId: string): Promise<void> {
+    const item = await this.getItemById(itemId);
+    if (!item) {
       throw new Error('Item not found');
     }
 
-    const bag: string[] = this.userIdToBag.get(userId) || [];
-    bag.push(item);
-    this.userIdToBag.set(userId, bag);
+    const bag: string[] = this.userIdToItemIdsInBag.get(userId) || [];
+    bag.push(item.id);
+    this.userIdToItemIdsInBag.set(userId, bag);
   }
 
-  public async getItemsInBag(userId: string): Promise<string[]> {
-    return this.userIdToBag.get(userId) || [];
+  public async getItemsInBag(userId: string): Promise<Readonly<ItemModel>[]> {
+    const ids: string[] = this.userIdToItemIdsInBag.get(userId) || [];
+    return ids.map(id => this.itemIdToItem.get(id)!);
   }
 
   public async clearBag(userId: string): Promise<void> {
-    this.userIdToBag.delete(userId);
+    this.userIdToItemIdsInBag.delete(userId);
   }
 
-  public async payOrder(userId: string): Promise<string> {
+  public async payOrder(userId: string): Promise<{ orderId: string }> {
     const orderId = Date.now().toString();
 
-    const bag = await this.getItemsInBag(userId);
-    this.orderIdToBag.set(orderId, bag);
+    const ids: string[] = this.userIdToItemIdsInBag.get(userId) || [];
+    this.orderIdToItemsInBag.set(orderId, ids);
 
-    return orderId;
+    return { orderId };
   }
 
   // #endregion

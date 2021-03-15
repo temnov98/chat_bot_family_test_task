@@ -22,7 +22,7 @@ describe('InMemoryStorage', () => {
       const itemsFromStorage = await storage.getAllItems();
 
       expect(itemsFromStorage.sort()).toEqual(items.sort());
-    }    
+    }
   });
 
   it('items with expcetions', async () => {
