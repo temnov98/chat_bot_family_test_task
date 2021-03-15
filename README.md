@@ -33,3 +33,6 @@ ChatBot_Family test task
 1. Создать канал в телеграме.
 2. Добавить бота в канал.
 3. Написать /show_items в канале. После этого бот разместит товары в канале.
+
+### Generate migrations
+    npm run typeorm migration:generate -- -n {Name}Migration

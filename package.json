@@ -5,10 +5,11 @@
   "main": "index.js",
   "scripts": {
     "build": "rimraf dist && tsc",
-    "start": "ts-node -r tsconfig-paths/register src/main.ts",
+    "start": "cross-env TS_NODE=true ts-node -r tsconfig-paths/register src/main.ts",
     "start:prod": "node dist/main",
     "test": "jest",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest"
+    "test:debug": "cross-env TS_NODE=true node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest",
+    "typeorm": "cross-env TS_NODE=true ts-node ./node_modules/typeorm/cli.js"
   },
   "repository": {
     "type": "git",
@@ -25,13 +26,19 @@
     "dotenv": "^8.2.0",
     "inversify": "^5.0.5",
     "reflect-metadata": "^0.1.13",
-    "telegraf": "^4.2.1"
+    "sqlite3": "^5.0.2",
+    "telegraf": "^4.2.1",
+    "typeorm": "^0.2.31",
+    "typeorm-naming-strategies": "^2.0.0",
+    "uuid": "^8.3.2"
   },
   "devDependencies": {
     "@types/dotenv": "^8.2.0",
     "@types/hapi__joi": "^17.1.6",
     "@types/jest": "^26.0.20",
     "@types/node": "^14.14.33",
+    "@types/uuid": "^8.3.0",
+    "cross-env": "^7.0.3",
     "jest": "^26.6.3",
     "rimraf": "^3.0.2",
     "ts-jest": "^26.5.3",
