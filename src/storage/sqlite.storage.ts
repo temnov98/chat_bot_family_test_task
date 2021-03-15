@@ -23,8 +23,32 @@ export class SQLiteStorage implements Types.Storage.TYPE {
     // в конструкторе, потому что используется в initConnection. Через Property не будет работать
     @inject(Types.ConfigsService.TOKEN)
     private readonly configsService: Types.ConfigsService.TYPE,
+
+    @inject(Types.StorageConfig.TOKEN)
+    private readonly storageConfig: Types.StorageConfig.TYPE,
   ) {
-    this.initConnection();
+    if (storageConfig.initConnection) {
+      this.initConnection();
+    }
+  }
+
+  public async initConnection() {
+    this.connection = await createConnection({
+      type: "sqlite",
+      database: this.configsService.database.database,
+      migrationsTableName: this.configsService.database.migrations.tableName,
+      migrationsRun: this.configsService.database.migrations.run,
+      synchronize: this.configsService.database.synchronize,
+      logging: this.configsService.database.logging,
+      namingStrategy: new SnakeNamingStrategy(),
+      entities:  [ (this.configsService.tsNode) ? 'src/**/*.entity.ts' : 'dist/**/*.entity.js' ],
+      migrations:  [ (this.configsService.tsNode) ? 'src/**/*Migration.ts' : 'dist/**/*Migration.js' ],
+      migrationsTransactionMode: "each",
+    });
+  }
+
+  public async closeConnection(): Promise<void> {
+    await this.connection.close();
   }
 
   public async addItem(name: string): Promise<Readonly<ItemModel>> {
@@ -129,21 +153,6 @@ export class SQLiteStorage implements Types.Storage.TYPE {
 
   private get bagsRepository() {
     return this.connection.getRepository(BagEntity);
-  }
-
-  private async initConnection() {
-    this.connection = await createConnection({
-      type: "sqlite",
-      database: this.configsService.database.database,
-      migrationsTableName: this.configsService.database.migrations.tableName,
-      migrationsRun: this.configsService.database.migrations.run,
-      synchronize: this.configsService.database.synchronize,
-      logging: this.configsService.database.logging,
-      namingStrategy: new SnakeNamingStrategy(),
-      entities:  [ (this.configsService.tsNode) ? 'src/**/*.entity.ts' : 'dist/**/*.entity.js' ],
-      migrations:  [ (this.configsService.tsNode) ? 'src/**/*Migration.ts' : 'dist/**/*Migration.js' ],
-      migrationsTransactionMode: "each",
-    });
   }
 
   // #endregion

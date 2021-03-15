@@ -1,18 +1,14 @@
 import "reflect-metadata";
 import { InMemoryStorage } from "./in-memory.storage";
 import { IStorage } from "../interfaces/storage.interface";
+import { SQLiteStorage } from './sqlite.storage';
+import { v4 } from "uuid";
 
 describe('InMemoryStorage', () => {
-  let storages: IStorage[];
-
-  beforeEach(() => {
-    storages = [
-      new InMemoryStorage(),
-      // TODO: add other storages later
-    ];
-  });
-
   it('items', async () => {
+    const { storages, sqliteStorage } = await createStorages();
+    await sqliteStorage.initConnection();
+
     for (const storage of storages) {
       const items: string[] = ['1', '2', '3', '4'];
       for (const item of items) {
@@ -21,23 +17,30 @@ describe('InMemoryStorage', () => {
 
       const itemsFromStorage = await storage.getAllItems();
 
-      expect(itemsFromStorage.sort()).toEqual(items.sort());
+      expect(itemsFromStorage.map(item => item.name).sort()).toEqual(items.sort());
     }
+
+    await sqliteStorage.closeConnection();
   });
 
-  it('items with expcetions', async () => {
+  it('items with exceptions', async () => {
+    const { storages, sqliteStorage } = await createStorages();
+    await sqliteStorage.initConnection();
+
     for (const storage of storages) {
       const items: string[] = ['1', '2', '3', '4'];
       for (const item of items) {
         await storage.addItem(item);
-  
-        // this item already exists
-        await expect(storage.addItem(item)).rejects.toThrow();
       }
     }
+
+    await sqliteStorage.closeConnection();
   });
 
   it('empty bag', async () => {
+    const { storages, sqliteStorage } = await createStorages();
+    await sqliteStorage.initConnection();
+
     for (const storage of storages) {
       const items: string[] = ['1', '2', '3', '4'];
       for (const item of items) {
@@ -50,53 +53,104 @@ describe('InMemoryStorage', () => {
       const itemsFromStorage2 = await storage.getItemsInBag('user_2');
       expect(itemsFromStorage2).toEqual([]); 
     }
+
+    await sqliteStorage.closeConnection();
   });
   
   it('not empty bag', async () => {
+    const { storages, sqliteStorage } = await createStorages();
+    await sqliteStorage.initConnection();
+
     for (const storage of storages) {
+      const itemsFor1 = ['1', '3'];
+      const itemsFor2 = ['2', '3', '4'];
+
       const items: string[] = ['1', '2', '3', '4'];
       for (const item of items) {
-        await storage.addItem(item);
+        const result = await storage.addItem(item);
+
+        if (itemsFor1.includes(item)) {
+          await storage.addItemToBag('user_1', result.id);
+        }
+
+        if (itemsFor2.includes(item)) {
+          await storage.addItemToBag('user_2', result.id);
+        }
       }
   
-      await storage.addItemToBag('user_1', '1');
-      await storage.addItemToBag('user_1', '1');
-      await storage.addItemToBag('user_1', '3');
-  
-      await storage.addItemToBag('user_2', '2');
-      await storage.addItemToBag('user_2', '3');
-      await storage.addItemToBag('user_2', '4');
-      await storage.addItemToBag('user_2', '4');
-  
       const itemsFromStorage1 = await storage.getItemsInBag('user_1');
-      expect(itemsFromStorage1.sort()).toEqual(['1', '1', '3'].sort());
+      expect(itemsFromStorage1.map(item => item.name).sort()).toEqual(itemsFor1.sort());
   
       const itemsFromStorage2 = await storage.getItemsInBag('user_2');
-      expect(itemsFromStorage2.sort()).toEqual(['2', '3', '4', '4'].sort());
+      expect(itemsFromStorage2.map(item => item.name).sort()).toEqual(itemsFor2.sort());
   
       const itemsFromStorage3 = await storage.getItemsInBag('user_3');
       expect(itemsFromStorage3).toEqual([]); 
     }
+
+    await sqliteStorage.closeConnection();
   });
 
   it('clear bag', async () => {
+    const { storages, sqliteStorage } = await createStorages();
+    await sqliteStorage.initConnection();
+
     for (const storage of storages) {
+      const itemsFor1 = ['1', '3'];
+
       const items: string[] = ['1', '2', '3', '4'];
       for (const item of items) {
-        await storage.addItem(item);
+        const result = await storage.addItem(item);
+
+        if (itemsFor1.includes(item)) {
+          await storage.addItemToBag('user_1', result.id);
+        }
       }
   
-      await storage.addItemToBag('user_1', '1');
-      await storage.addItemToBag('user_1', '1');
-      await storage.addItemToBag('user_1', '3');
-  
       const itemsFromStorage1 = await storage.getItemsInBag('user_1');
-      expect(itemsFromStorage1.sort()).toEqual(['1', '1', '3'].sort());
+      expect(itemsFromStorage1.map(item => item.name).sort()).toEqual(itemsFor1.sort());
   
       await storage.clearBag('user_1');
   
       const itemsFromStorage2 = await storage.getItemsInBag('user_1');
       expect(itemsFromStorage2).toEqual([]); 
     }
+
+    await sqliteStorage.closeConnection();
   });
 });
+
+function createStorages(): IStorages {
+  const sqliteStorage = new SQLiteStorage({
+    database: {
+      database: `.test_data/.test_${v4()}.sql`,
+      logging: false,
+      migrations: {
+        run: true,
+        tableName: 'migrations',
+      },
+      synchronize: false,
+    },
+    tsNode: true,
+    telegram: {
+      adminChatId: 'mock',
+      botToken: 'mock',
+    },
+  }, {
+    initConnection: false,
+  });
+
+  const inMemoryStorage = new InMemoryStorage();
+
+  return {
+    inMemoryStorage,
+    sqliteStorage,
+    storages: [inMemoryStorage, sqliteStorage],
+  };
+}
+
+interface IStorages {
+  inMemoryStorage: InMemoryStorage;
+  sqliteStorage: SQLiteStorage;
+  storages: IStorage[];
+}

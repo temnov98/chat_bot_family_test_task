@@ -1,6 +1,7 @@
 import { injectable } from "inversify";
 import { Types } from "../types";
 import { ItemModel } from "./item.model";
+import { v4 } from "uuid";
 
 @injectable()
 export class InMemoryStorage implements Types.Storage.TYPE {
@@ -17,7 +18,7 @@ export class InMemoryStorage implements Types.Storage.TYPE {
   public async addItem(name: string): Promise<Readonly<ItemModel>> {
     const item: ItemModel = {
       name,
-      id: Date.now().toString(),
+      id: v4(),
     };
 
     this.itemIdToItem.set(item.id, item);
@@ -53,7 +54,7 @@ export class InMemoryStorage implements Types.Storage.TYPE {
   }
 
   public async payOrder(userId: string): Promise<{ orderId: string }> {
-    const orderId = Date.now().toString();
+    const orderId = v4();
 
     const ids: string[] = this.userIdToItemIdsInBag.get(userId) || [];
     this.orderIdToItemsInBag.set(orderId, ids);
